@@ -13,36 +13,45 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="preload" href="fonts/Outfit.woff" as="font" type="font/woff" crossorigin>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body data-theme="midnight">
   <div id="app">
+    <div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
 
     <!-- HOME -->
     <section id="screen-home" class="screen active">
       <div class="topbar">
-        <span></span>
+        <span></span><span></span>
         <div class="gem-pill"><i class="gem"></i><span class="gem-count">0</span></div>
       </div>
       <div class="home-hero">
-        <canvas id="logo-canvas" width="300" height="160" aria-hidden="true"></canvas>
-        <h1 class="logo">CHROMA<span>DOCK</span></h1>
-        <p class="tagline">Slide. Sort. Escape.</p>
+        <canvas id="logo-canvas" width="300" height="130" aria-hidden="true"></canvas>
+        <h1 class="logo">Chroma<span>Dock</span></h1>
+        <p class="tagline">Slide · Sort · Escape</p>
+      </div>
+      <div class="home-card" id="home-card">
+        <div class="hc-row"><span id="hc-chapter">Warm Up</span><span id="hc-stars">★ 0</span></div>
+        <div class="hc-bar"><i id="hc-fill"></i></div>
+        <div class="hc-row hc-sub"><span id="hc-cleared">0 of 120 levels cleared</span></div>
       </div>
       <div class="home-buttons">
-        <button class="btn btn-primary btn-xl" id="btn-play"><span>Play</span><small id="play-sub">Level 1</small></button>
-        <button class="btn btn-ghost" id="btn-levels">Levels</button>
-        <button class="btn btn-ghost" id="btn-store"><i class="gem"></i> Gem Store</button>
-        <button class="btn btn-ghost" id="btn-settings">Settings</button>
-        <button class="btn btn-ghost install-btn" id="btn-install" hidden>📲 Install app</button>
+        <button class="btn btn-primary btn-xl" id="btn-play"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></svg><span class="bx"><span>Play</span><small id="play-sub">Level 1</small></span></button>
+        <div class="nav-grid">
+          <button class="nav" id="btn-levels"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/></svg><span>Levels</span></button>
+          <button class="nav" id="btn-store"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 4h11L21 9l-9 11L3 9z"/><path d="M3 9h18M9.5 4L8 9l4 11 4-11-1.5-5"/></svg><span>Store</span></button>
+          <button class="nav" id="btn-settings"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h9M19 6h1M4 12h3M13 12h7M4 18h11M20 18h0"/><circle cx="16" cy="6" r="2.2"/><circle cx="10" cy="12" r="2.2"/><circle cx="17.5" cy="18" r="2.2"/></svg><span>Settings</span></button>
+        </div>
+        <button class="btn btn-ghost install-btn" id="btn-install" hidden><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></svg> Install app</button>
       </div>
-      <p class="footnote">Gems are earned in-game only. No real money, ever.</p>
+      <p class="footnote">Gems are earned by playing. No real money, ever. · <button class="link" id="btn-credits-home">Credits</button></p>
     </section>
 
     <!-- LEVEL SELECT -->
     <section id="screen-levels" class="screen">
       <div class="topbar">
-        <button class="icon-btn" data-back aria-label="Back">‹</button>
+        <button class="icon-btn" data-back aria-label="Back"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
         <h2>Levels</h2>
         <div class="gem-pill"><i class="gem"></i><span class="gem-count">0</span></div>
       </div>
@@ -52,7 +61,7 @@
     <!-- GAME -->
     <section id="screen-game" class="screen">
       <div class="topbar game-top">
-        <button class="icon-btn" id="btn-game-back" aria-label="Menu">‹</button>
+        <button class="icon-btn" id="btn-game-back" aria-label="Menu"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
         <div class="level-title"><div id="lvl-num">Level 1</div><div id="lvl-name">First Slide</div></div>
         <div class="gem-pill"><i class="gem"></i><span class="gem-count">0</span></div>
       </div>
@@ -70,17 +79,17 @@
         <canvas id="board"></canvas>
       </div>
       <div class="toolbar">
-        <button class="tool" id="btn-undo"><span class="ti">↶</span><small>Undo</small></button>
-        <button class="tool" id="btn-restart"><span class="ti">⟲</span><small>Restart</small></button>
-        <button class="tool" id="btn-hint"><span class="ti">💡</span><small>Hint</small><b class="badge" id="hint-count">0</b></button>
-        <button class="tool" id="btn-boost"><span class="ti">⏱</span><small>+15s</small><b class="badge" id="boost-count">0</b></button>
+        <button class="tool" id="btn-undo"><span class="ti"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg></span><small>Undo</small></button>
+        <button class="tool" id="btn-restart"><span class="ti"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3.5 4v5h5"/></svg></span><small>Restart</small></button>
+        <button class="tool" id="btn-hint"><span class="ti"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 18h5M10.5 21h3"/><path d="M12 3a6 6 0 0 0-4 10.5c.6.6 1 1.4 1 2.5h6c0-1.1.4-1.9 1-2.5A6 6 0 0 0 12 3z"/></svg></span><small>Hint</small><b class="badge" id="hint-count">0</b></button>
+        <button class="tool" id="btn-boost"><span class="ti"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9.5 2.5h5"/></svg></span><small>+15s</small><b class="badge" id="boost-count">0</b></button>
       </div>
     </section>
 
     <!-- STORE -->
     <section id="screen-store" class="screen">
       <div class="topbar">
-        <button class="icon-btn" data-back aria-label="Back">‹</button>
+        <button class="icon-btn" data-back aria-label="Back"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
         <h2>Gem Store</h2>
         <div class="gem-pill"><i class="gem"></i><span class="gem-count">0</span></div>
       </div>
@@ -96,12 +105,13 @@
     <!-- SETTINGS -->
     <section id="screen-settings" class="screen">
       <div class="topbar">
-        <button class="icon-btn" data-back aria-label="Back">‹</button>
+        <button class="icon-btn" data-back aria-label="Back"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
         <h2>Settings</h2>
         <span></span>
       </div>
       <div class="scroll settings">
         <label class="setting"><span>Sound effects</span><input type="checkbox" id="set-sound"><i class="switch"></i></label>
+        <label class="setting"><span>Music <small>Relaxing background music, made live by the game</small></span><input type="checkbox" id="set-music"><i class="switch"></i></label>
         <label class="setting"><span>Vibration</span><input type="checkbox" id="set-haptics"><i class="switch"></i></label>
         <label class="setting"><span>Colour symbols <small>Shapes on blocks and gates (colour-blind friendly)</small></span><input type="checkbox" id="set-symbols"><i class="switch"></i></label>
         <div class="setting how">
@@ -113,7 +123,7 @@
             <li><b>Big blocks</b> (bars, crates, L-blocks) slide as one piece. They need a gate at least as wide as they are, and they can't ride elevators.</li>
             <li><b>Locked gates</b> show a padlock. They stay shut until every block of the padlock's colour has left the board.</li>
             <li><b>Generators</b> drop a new block whenever their outlet is clear. Every block has to escape.</li>
-            <li>Beat the clock for <b>bonus gems</b>. Running out of time never ends the level.</li>
+            <li>The clock starts on your <b>first move</b>, so take your time to plan. Beat it for <b>bonus gems</b>. Running out of time never ends the level.</li>
             <li>You can also tap a block, then tap a spot in the same row or column. On a keyboard, use the arrow keys, Z (undo) and R (restart).</li>
           </ul>
         </div>
@@ -122,6 +132,7 @@
           <div class="app-btns">
             <button class="btn" id="btn-install-2" hidden>Install</button>
             <button class="btn" id="btn-check-update">Check for updates</button>
+            <button class="btn" id="btn-credits">Credits</button>
           </div>
         </div>
         <div id="debug-section" class="debug">

@@ -9,7 +9,7 @@
   // Shows the Debug section in Settings (unlock all levels, infinite gems). Set to false before publishing.
   var DEBUG_MENU = true;
   // Shown in Settings. tools/release.js keeps this in step with VERSION in sw.js.
-  var APP_VERSION = '1.1.0';
+  var APP_VERSION = '1.2.0';
 
   // ---------------- Save data ----------------
   var SAVE_KEY = 'chromadock-save-v1';
@@ -18,7 +18,7 @@
     gems: 25, unlocked: 1, stars: {}, best: {}, cleared: {}, tipsSeen: {},
     inv: { hint: 3, boost: 1, skip: 0 },
     owned: { skin: ['classic'], theme: ['midnight'] },
-    skin: 'classic', theme: 'midnight', sound: true, haptics: true, symbols: true,
+    skin: 'classic', theme: 'midnight', sound: true, music: true, haptics: true, symbols: true,
     debug: { unlockAll: false, infiniteGems: false }
   };
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
@@ -78,7 +78,8 @@
   function maxUnlocked() { return save.debug.unlockAll ? LEVELS.length : save.unlocked; }
   function infinite() { return !!save.debug.infiniteGems; }
   function canAfford(price) { return infinite() || save.gems >= price; }
-  function refreshGems(bump) { $$('.gem-count').forEach(function (el) { el.textContent = infinite() ? '∞' : save.gems; }); if (bump) $$('.gem-pill').forEach(function (p) { p.classList.remove('bump'); void p.offsetWidth; p.classList.add('bump'); }); }
+  var gemShown = null; // while gems fly to the counter it counts up instead of jumping
+  function refreshGems(bump) { $$('.gem-count').forEach(function (el) { el.textContent = infinite() ? '∞' : (gemShown === null ? save.gems : gemShown); }); if (bump) $$('.gem-pill').forEach(function (p) { p.classList.remove('bump'); void p.offsetWidth; p.classList.add('bump'); }); }
   function starsFor(moves, opt) { return moves <= opt ? 3 : moves <= Math.ceil(opt * 1.5) + 1 ? 2 : 1; }
   function timeLimit(lv) { return Math.max(20, Math.round((15 + lv.opt * 4.5) / 5) * 5); }
   function bonusFor(remaining) { return remaining > 0 ? Math.min(12, Math.ceil(remaining / 4)) : 0; }
@@ -93,6 +94,7 @@
     if (name === 'levels') renderLevels();
     if (name === 'store') renderStore();
     if (name === 'home') renderHome();
+    if (name !== 'game') Sfx.setMood(0, true);
     if (name === 'game') { setTimeout(function () { renderer.layout(); renderer.snap(G.state); }, 30); if (!G.won && !modalOpen()) resumeTimer(); }
     refreshGems();
   }
@@ -109,24 +111,57 @@
   function renderHome() {
     var n = nextLevel();
     $('#play-sub').textContent = 'Level ' + n + ' · ' + (LEVELS[n - 1].name || '');
+    var cleared = 0, stars = 0;
+    for (var i = 1; i <= LEVELS.length; i++) { if (save.cleared[i]) cleared++; stars += save.stars[i] || 0; }
+    var ch = CHAPTERS.find(function (c) { return n >= c.from && n <= c.to; }) || CHAPTERS[0];
+    $('#hc-chapter').textContent = 'Chapter ' + (CHAPTERS.indexOf(ch) + 1) + ' · ' + ch.name;
+    $('#hc-stars').textContent = '★ ' + stars + ' / ' + LEVELS.length * 3;
+    $('#hc-cleared').textContent = cleared + ' of ' + LEVELS.length + ' levels cleared';
+    $('#hc-fill').style.width = (100 * cleared / LEVELS.length) + '%';
   }
   $('#btn-play').addEventListener('click', function () { Sfx.unlock(); Sfx.play('click'); startLevel(nextLevel()); });
   $('#btn-levels').addEventListener('click', function () { Sfx.unlock(); Sfx.play('click'); show('levels', 'home'); });
   $('#btn-store').addEventListener('click', function () { Sfx.unlock(); Sfx.play('click'); show('store', 'home'); });
   $('#btn-settings').addEventListener('click', function () { Sfx.unlock(); Sfx.play('click'); show('settings', 'home'); });
 
-  // Logo animation
-  (function logo() {
-    var cv = $('#logo-canvas'), ctx = cv.getContext('2d'), dpr = Math.min(window.devicePixelRatio || 1, 3);
-    cv.width = 300 * dpr; cv.height = 160 * dpr;
-    var blocks = [[48, 112, 0], [116, 118, 2], [184, 112, 3], [252, 118, 4]];
+  // Home animation: blocks queue up in a dock and slide out through a glowing gate, on a loop.
+  (function dockScene() {
+    var cv = $('#logo-canvas'), ctx = cv.getContext('2d'), dpr = Math.min(window.devicePixelRatio || 1, 3), W = 300, H = 130;
+    cv.width = W * dpr; cv.height = H * dpr;
+    var SZ = 46, GAP = 56, X0 = 34, Y = 66, CYCLE = 2600, row = [0, 1, 2, 3], next = 4, t0 = null, flash = 0;
+    function easeIO(p) { return p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2; }
     function f(t) {
-      if (current === 'home') {
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, 300, 160);
-        blocks.forEach(function (b, i) { var y = b[1] + Math.sin(t / 520 + i * 1.3) * 8; BR.drawBlock(ctx, save.skin, b[2], b[0], y, 52, { time: t, symbols: save.symbols }); });
-        BR.drawPiece(ctx, save.skin, 1, 1, 90, 12 + Math.sin(t / 520 + 5) * 6, 60, { time: t, symbols: save.symbols });
-      }
       requestAnimationFrame(f);
+      if (current !== 'home') { t0 = null; return; }
+      if (t0 === null) t0 = t;
+      var k = (t - t0) / CYCLE;
+      if (k >= 1) { row.pop(); row.unshift(next); next = (next + 1) % 6; t0 = t; k = 0; }
+      var out = Math.min(1, Math.max(0, (k - 0.3) / 0.2)), shift = easeIO(Math.min(1, Math.max(0, (k - 0.52) / 0.3)));
+      if (out >= 1 && k < 0.56) flash = 1;
+      flash = Math.max(0, flash - 0.03);
+      var gc = BR.COLORS[row[3]];
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+      // dock tray
+      BR.rr(ctx, 8, Y - 34, 240, 68, 20); ctx.fillStyle = 'rgba(255,255,255,.06)'; ctx.fill();
+      ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,255,255,.12)'; ctx.stroke();
+      // gate
+      ctx.save(); ctx.shadowColor = gc; ctx.shadowBlur = 14 + flash * 26 + Math.sin(t / 400) * 4;
+      BR.rr(ctx, 256, Y - 30, 30, 60, 12); ctx.fillStyle = BR.shade(gc, -0.25 + flash * 0.5); ctx.fill();
+      ctx.shadowBlur = 0; ctx.lineWidth = 2; ctx.strokeStyle = BR.shade(gc, 0.3); ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      var bob = (t / 700) % 1 * 6;
+      ctx.globalAlpha = 0.8 - (bob / 6) * 0.5; ctx.beginPath(); ctx.moveTo(266 + bob, Y - 8); ctx.lineTo(274 + bob, Y); ctx.lineTo(266 + bob, Y + 8); ctx.stroke();
+      ctx.restore();
+      // blocks
+      var opt = { time: t, symbols: save.symbols };
+      for (var i = 0; i < 4; i++) {
+        var x = X0 + i * GAP, a = 1, sc = 1;
+        if (i === 3) { x += easeIO(out) * 62; a = 1 - Math.max(0, (out - 0.55) / 0.45); sc = 1 - out * 0.25; }
+        else x += shift * GAP;
+        if (a <= 0) continue;
+        ctx.save(); ctx.globalAlpha = a; BR.drawBlock(ctx, save.skin, row[i], x, Y, SZ * sc, opt); ctx.restore();
+      }
+      if (shift > 0) { ctx.save(); ctx.globalAlpha = shift; BR.drawBlock(ctx, save.skin, next, X0 - GAP + shift * GAP, Y, SZ * (0.6 + 0.4 * shift), opt); ctx.restore(); }
     }
     requestAnimationFrame(f);
   })();
@@ -163,14 +198,15 @@
   function applyLook() {
     document.body.dataset.theme = save.theme; renderer.setTheme(save.theme); renderer.setSkin(save.skin); renderer.setSymbols(save.symbols);
     var m = document.querySelector('meta[name="theme-color"]'); if (m) m.setAttribute('content', THEME_COLORS[save.theme] || '#12122a');
-    Sfx.setEnabled(save.sound);
+    Sfx.setEnabled(save.sound); Sfx.setMusic(save.music);
   }
 
   function startLevel(n) {
     n = Math.max(1, Math.min(LEVELS.length, n));
     var lv = LEVELS[n - 1];
     G.n = n; G.lv = lv; G.C = E.compile(lv); G.init = E.initialState(G.C); G.state = G.init;
-    G.history = []; G.moves = 0; G.limit = timeLimit(lv); G.elapsed = 0; G.running = false; G.won = false; G.overNotified = false;
+    G.history = []; G.moves = 0; G.limit = timeLimit(lv); G.elapsed = 0; G.running = false; G.started = false; G.docked = 0; G.won = false; G.overNotified = false;
+    hudCache = ''; Sfx.setMood(Math.floor((n - 1) / 10), false);
     renderer.selected = null; renderer.hint = null;
     $('#lvl-num').textContent = 'Level ' + n; $('#lvl-name').textContent = lv.name || '';
     $('#par-text').textContent = lv.opt;
@@ -185,20 +221,21 @@
   }
 
   function pauseTimer() { if (G.running) { G.elapsed += (performance.now() - G.last) / 1000; G.running = false; } }
-  function resumeTimer() { if (!G.running && !G.won && current === 'game') { G.running = true; G.last = performance.now(); } }
+  function resumeTimer() { if (G.started && !G.running && !G.won && current === 'game') { G.running = true; G.last = performance.now(); } }
   function elapsedNow() { return G.elapsed + (G.running ? (performance.now() - G.last) / 1000 : 0); }
 
   var hudCache = '';
   function updateHud() {
     var rem = G.limit - elapsedNow(), frac = Math.max(0, Math.min(1, rem / G.limit));
-    var key = Math.ceil(rem) + '|' + G.moves + '|' + G.limit;
+    var key = Math.ceil(rem) + '|' + G.moves + '|' + G.limit + '|' + G.started;
     var fill = $('#timer-fill');
     fill.style.transform = 'scaleX(' + frac + ')';
     if (key === hudCache) return; hudCache = key;
     fill.classList.toggle('warn', rem > 0 && frac < 0.3); fill.classList.toggle('over', rem <= 0);
     $('#moves-text').textContent = G.moves;
     var bt = $('#bonus-text');
-    if (rem > 0) { $('#timer-text').textContent = fmt(rem); bt.innerHTML = 'Bonus <i class="gem"></i> +' + bonusFor(rem); bt.classList.remove('over'); }
+    if (!G.started) { $('#timer-text').innerHTML = fmt(rem) + ' <span class="wait">· starts on first move</span>'; bt.innerHTML = 'Bonus <i class="gem"></i> +' + bonusFor(rem); bt.classList.remove('over'); }
+    else if (rem > 0) { $('#timer-text').textContent = fmt(rem); bt.innerHTML = 'Bonus <i class="gem"></i> +' + bonusFor(rem); bt.classList.remove('over'); }
     else { $('#timer-text').textContent = 'Time’s up'; bt.textContent = 'No rush, keep going'; bt.classList.add('over'); }
     if (rem <= 0 && !G.overNotified && G.running) { G.overNotified = true; Sfx.play('timeout'); toast('Bonus time is over. Take as long as you need!'); }
   }
@@ -213,7 +250,7 @@
   var hooks = {
     slide: function (d) { Sfx.play('slide', d); haptic(6); },
     bump: function () { Sfx.play('bump'); },
-    exit: function (c) { Sfx.play('exit', c); haptic(18); },
+    exit: function () { Sfx.play('exit', G.docked++); haptic(18); },
     lift: function () { Sfx.play('lift'); },
     spawn: function () { Sfx.play('spawn'); }
   };
@@ -226,6 +263,7 @@
     var r = E.move(G.C, G.state, bi, dir);
     if (!r) { Sfx.play('bump'); haptic(4); wiggle(id, dir); return; }
     G.history.push(G.state); G.state = r.state; G.moves++;
+    if (!G.started) { G.started = true; resumeTimer(); hudCache = ''; }   // the clock starts on the first move
     renderer.hint = null;
     if (renderer.selected && !G.state.blocks.some(function (b) { return b.id === renderer.selected; })) renderer.selected = null;
     var won = E.isWon(G.C, G.state);
@@ -322,8 +360,9 @@
     save.unlocked = Math.max(save.unlocked, Math.min(LEVELS.length, n + 1));
     if (!save.best[n] || G.moves < save.best[n]) save.best[n] = G.moves;
     persist();
-    Sfx.play('win'); haptic([20, 40, 20, 40, 60]); confetti();
-    setTimeout(function () { if (total) Sfx.play('coin'); refreshGems(true); }, 700);
+    Sfx.play('win'); haptic([20, 40, 20, 40, 60]); celebrate();
+    for (var si = 1; si <= stars; si++) (function (k) { setTimeout(function () { Sfx.play('star', k - 1); }, 250 + k * 180); })(si);
+    if (total && !infinite()) { gemShown = save.gems - total; refreshGems(); setTimeout(function () { flyGems(total); }, 1000); }
     var last = n >= LEVELS.length;
     var rows = '';
     if (firstGems) rows += '<div><span>First clear</span><span>' + gemsHTML(firstGems) + '</span></div>';
@@ -339,22 +378,66 @@
       '<div class="row"><button class="btn" data-act="replay">Replay</button><button class="btn" data-act="levels">Levels</button></div></div>');
   }
 
-  // Confetti overlay
-  var fx = $('#fx'), fxc = fx.getContext('2d'), confettiParts = [], fxRunning = false;
-  function confetti() {
+  // Win celebration: a soft pulse of light and slow rising motes in the level's colours.
+  var fx = $('#fx'), fxc = fx.getContext('2d'), motes = [], pulseT = 0, fxRunning = false, fxLast = 0;
+  function celebrate() {
     var r = fx.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio || 1, 2);
     fx.width = r.width * dpr; fx.height = r.height * dpr; fxc.setTransform(dpr, 0, 0, dpr, 0, 0);
-    for (var i = 0; i < 140; i++) confettiParts.push({ x: r.width / 2 + (Math.random() - 0.5) * 80, y: r.height * 0.42, vx: (Math.random() - 0.5) * 14, vy: -Math.random() * 14 - 4, s: 5 + Math.random() * 6, c: BR.COLORS[i % 6], r: Math.random() * 6, vr: (Math.random() - 0.5) * 0.4, life: 1 });
-    if (!fxRunning) { fxRunning = true; requestAnimationFrame(fxLoop); }
+    var cols = (G.lv.doors || []).map(function (d) { return BR.COLORS[d[2]]; }); if (!cols.length) cols = BR.COLORS;
+    motes = [];
+    for (var i = 0; i < 44; i++) motes.push({ x: Math.random() * r.width, y: r.height * (0.45 + Math.random() * 0.65), vy: 18 + Math.random() * 46, r: 1.5 + Math.random() * 4.5,
+      c: cols[i % cols.length], ph: Math.random() * 6, life: 1, decay: 0.16 + Math.random() * 0.16, delay: Math.random() * 0.9 });
+    pulseT = 1;
+    if (!fxRunning) { fxRunning = true; fxLast = performance.now(); requestAnimationFrame(fxLoop); }
   }
-  function fxLoop() {
-    var r = fx.getBoundingClientRect(); fxc.clearRect(0, 0, r.width, r.height);
-    confettiParts = confettiParts.filter(function (p) {
-      p.vy += 0.35; p.vx *= 0.99; p.x += p.vx; p.y += p.vy; p.r += p.vr; p.life -= 0.006;
-      fxc.save(); fxc.globalAlpha = Math.max(0, p.life); fxc.translate(p.x, p.y); fxc.rotate(p.r); fxc.fillStyle = p.c; fxc.fillRect(-p.s / 2, -p.s / 4, p.s, p.s / 2); fxc.restore();
-      return p.life > 0 && p.y < r.height + 20;
+  function fxLoop(now) {
+    var r = fx.getBoundingClientRect(), dt = Math.min(0.05, (now - fxLast) / 1000); fxLast = now;
+    fxc.clearRect(0, 0, r.width, r.height);
+    fxc.globalCompositeOperation = save.theme === 'paper' ? 'source-over' : 'lighter';
+    if (pulseT > 0) {
+      var k = 1 - pulseT, cx = r.width / 2, cy = r.height * 0.4, rad = r.width * (0.25 + 0.9 * (1 - Math.pow(1 - k, 3)));
+      var g = fxc.createRadialGradient(cx, cy, 0, cx, cy, rad);
+      g.addColorStop(0, 'rgba(255,255,255,' + 0.22 * pulseT + ')'); g.addColorStop(0.6, 'rgba(160,190,255,' + 0.1 * pulseT + ')'); g.addColorStop(1, 'rgba(160,190,255,0)');
+      fxc.fillStyle = g; fxc.fillRect(0, 0, r.width, r.height);
+      pulseT -= dt * 1.1;
+    }
+    motes = motes.filter(function (m) {
+      if (m.delay > 0) { m.delay -= dt; return true; }
+      m.y -= m.vy * dt; m.life -= m.decay * dt; m.ph += dt * 1.6;
+      var x = m.x + Math.sin(m.ph) * 10, a = Math.min(1, (1 - m.life) * 6) * Math.max(0, m.life);
+      var gg = fxc.createRadialGradient(x, m.y, 0, x, m.y, m.r * 4);
+      gg.addColorStop(0, hexA(m.c, 0.55 * a)); gg.addColorStop(1, hexA(m.c, 0));
+      fxc.fillStyle = gg; fxc.fillRect(x - m.r * 4, m.y - m.r * 4, m.r * 8, m.r * 8);
+      fxc.fillStyle = 'rgba(255,255,255,' + 0.7 * a + ')'; fxc.beginPath(); fxc.arc(x, m.y, m.r * 0.45, 0, 7); fxc.fill();
+      return m.life > 0;
     });
-    if (confettiParts.length) requestAnimationFrame(fxLoop); else { fxRunning = false; fxc.clearRect(0, 0, r.width, r.height); }
+    if (motes.length || pulseT > 0) requestAnimationFrame(fxLoop); else { fxRunning = false; fxc.clearRect(0, 0, r.width, r.height); }
+  }
+  function hexA(h, a) { var n = parseInt(h.slice(1), 16); return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')'; }
+
+  // Earned gems fly from the reward total up to the gem counter, which counts up as they land.
+  function flyGems(total) {
+    var from = document.querySelector('.rewards .total .gem'), to = document.querySelector('#screen-game .gem-pill .gem'), app = $('#app');
+    var done = function () { gemShown = null; refreshGems(true); };
+    if (!from || !to || !from.animate) { Sfx.play('coin'); done(); return; }
+    var ar = app.getBoundingClientRect(), a = from.getBoundingClientRect(), b = to.getBoundingClientRect();
+    var n = Math.min(total, 8), landed = 0, start = gemShown;
+    for (var i = 0; i < n; i++) (function (i) {
+      var el = document.createElement('i'); el.className = 'gem fly'; app.appendChild(el);
+      var x0 = a.left - ar.left, y0 = a.top - ar.top, x1 = b.left - ar.left, y1 = b.top - ar.top, mx = (x0 + x1) / 2 - 60 - Math.random() * 60, my = (y0 + y1) / 2;
+      var an = el.animate([
+        { transform: 'translate(' + x0 + 'px,' + y0 + 'px) scale(.6)', opacity: 0 },
+        { transform: 'translate(' + x0 + 'px,' + (y0 - 14) + 'px) scale(1.2)', opacity: 1, offset: 0.15 },
+        { transform: 'translate(' + mx + 'px,' + my + 'px) scale(1.1)', opacity: 1, offset: 0.6 },
+        { transform: 'translate(' + x1 + 'px,' + y1 + 'px) scale(.8)', opacity: 1 }
+      ], { duration: 700, delay: i * 90, easing: 'cubic-bezier(.4,0,.2,1)', fill: 'both' });
+      an.onfinish = function () {
+        el.remove(); landed++;
+        if (gemShown !== null) { gemShown = start + Math.round(total * landed / n); refreshGems(true); }
+        Sfx.play('gem', i); if (landed === n) done();
+      };
+    })(i);
+    setTimeout(function () { if (gemShown !== null) done(); }, 700 + n * 90 + 600); // safety net
   }
 
   // ---------------- Modal actions ----------------
@@ -499,13 +582,25 @@
 
   // ---------------- Settings ----------------
   function syncSettings() {
-    $('#set-sound').checked = save.sound; $('#set-haptics').checked = save.haptics; $('#set-symbols').checked = save.symbols;
+    $('#set-sound').checked = save.sound; $('#set-music').checked = save.music; $('#set-haptics').checked = save.haptics; $('#set-symbols').checked = save.symbols;
     $('#debug-section').hidden = !DEBUG_MENU;
     $('#set-unlock-all').checked = save.debug.unlockAll; $('#set-inf-gems').checked = save.debug.infiniteGems;
   }
   $('#set-unlock-all').addEventListener('change', function (e) { save.debug.unlockAll = e.target.checked; persist(); Sfx.play('click'); toast(e.target.checked ? 'All ' + LEVELS.length + ' levels unlocked' : 'Back to your real progress'); });
   $('#set-inf-gems').addEventListener('change', function (e) { save.debug.infiniteGems = e.target.checked; persist(); refreshGems(true); Sfx.play('click'); toast(e.target.checked ? 'Infinite gems on: store purchases are free' : 'Infinite gems off'); });
   $('#set-sound').addEventListener('change', function (e) { save.sound = e.target.checked; persist(); Sfx.setEnabled(save.sound); Sfx.unlock(); Sfx.play('click'); });
+  $('#set-music').addEventListener('change', function (e) { save.music = e.target.checked; persist(); Sfx.setMusic(save.music); Sfx.unlock(); });
+  function credits() {
+    Sfx.play('click');
+    openModal('<h2>Credits</h2><div class="credits">' +
+      '<p style="margin:0">Chroma Dock ' + APP_VERSION + '</p>' +
+      '<h4>Font</h4>Outfit, © 2021 The Outfit Project Authors. Used under the <a href="fonts/OFL-Outfit.txt" target="_blank" rel="noopener">SIL Open Font License 1.1</a>.' +
+      '<h4>Sound and music</h4>Synthesized live in your browser by the game. No recordings or samples are used.' +
+      '<h4>Graphics and icons</h4>Drawn by the game’s own code. Emoji in tips and the store come from your device.' +
+      '</div><div class="btns"><button class="btn btn-primary" data-act="close">Close</button></div>');
+  }
+  $('#btn-credits').addEventListener('click', credits);
+  $('#btn-credits-home').addEventListener('click', credits);
   $('#set-haptics').addEventListener('change', function (e) { save.haptics = e.target.checked; persist(); haptic(20); });
   $('#set-symbols').addEventListener('change', function (e) { save.symbols = e.target.checked; persist(); applyLook(); });
   $('#btn-reset').addEventListener('click', function () {

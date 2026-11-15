@@ -3,12 +3,13 @@
  * Every release gets a new VERSION (run `node tools/release.js`). The browser notices the changed
  * file, installs the new version in the background, and the game offers (or applies) the update.
  */
-const VERSION = 'chromadock-1.1.0';
+const VERSION = 'chromadock-1.2.0';
 const ASSETS = [
   './', 'index.html', 'css/style.css',
   'js/engine.js', 'js/levels.js', 'js/audio.js', 'js/render.js', 'js/app.js', 'js/hint-worker.js',
   'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png',
-  'icons/icon-maskable-192.png', 'icons/icon-maskable-512.png'
+  'icons/icon-maskable-192.png', 'icons/icon-maskable-512.png',
+  'fonts/Outfit.woff', 'fonts/OFL-Outfit.txt'
 ];
 
 self.addEventListener('install', e => {

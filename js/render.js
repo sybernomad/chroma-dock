@@ -240,7 +240,7 @@
   function Renderer(canvas) {
     this.cv = canvas; this.ctx = canvas.getContext('2d');
     this.skin = 'classic'; this.theme = THEMES.midnight; this.themeName = 'midnight'; this.symbols = true;
-    this.C = null; this.vis = new Map(); this.liftVis = []; this.anim = null; this.particles = [];
+    this.C = null; this.vis = new Map(); this.liftVis = []; this.anim = null; this.particles = []; this.fx = []; this.trail = null;
     this.hint = null; this.selected = null; this.static = null; this.stars = [];
     var self = this;
     this.loop = function (t) { self.frame(t); requestAnimationFrame(self.loop); };
@@ -253,7 +253,7 @@
   P.setSymbols = function (v) { this.symbols = v; this.buildStatic(); };
 
   P.setLevel = function (C, state) {
-    this.C = C; this.particles = []; this.hint = null; this.selected = null; this.anim = null; this.state = null;
+    this.C = C; this.particles = []; this.fx = []; this.trail = null; this.hint = null; this.selected = null; this.anim = null; this.state = null;
     this.computeSpans();
     this.layout(); this.snap(state);
   };
@@ -324,7 +324,7 @@
       var before = E.presentMask(C0, prev), after = E.presentMask(C0, state), opened = [];
       this.spans.forEach(function (sp) { if (sp.lock >= 0 && ((before >> sp.lock) & 1) && !((after >> sp.lock) & 1)) opened.push(sp); });
       if (opened.length && state.blocks.length < prev.blocks.length + 2) {
-        opened.forEach(function (sp) { for (var k = 0; k < sp.n; k++) self.burst(sp.x0 + sp.ax * k + 0.5, sp.y0 + sp.ay * k + 0.5, '#ffffff', 14); });
+        opened.forEach(function (sp) { for (var k = 0; k < sp.n; k++) { self.burst(sp.x0 + sp.ax * k + 0.5, sp.y0 + sp.ay * k + 0.5, COLORS[sp.c], 10); self.fx.push({ type: 'flash', x: sp.x0 + sp.ax * k, y: sp.y0 + sp.ay * k, color: '#ffffff', life: 1, decay: 1.8 }); } });
         if (this.onUnlock) this.onUnlock();
       }
     }
@@ -364,11 +364,22 @@
     phases.push({
       dur: Math.min(70 + 52 * full, 460),
       start: function () { hooks.slide && hooks.slide(full); },
-      update: function (p) { var e = ease.slide(p); vb.x = sl.from[0] + (tx - sl.from[0]) * e; vb.y = sl.from[1] + (ty - sl.from[1]) * e; },
+      update: function (p) {
+        var e = ease.slide(p); vb.x = sl.from[0] + (tx - sl.from[0]) * e; vb.y = sl.from[1] + (ty - sl.from[1]) * e;
+        if (!self.trail || self.trail.vb !== vb) self.trail = { vb: vb, from: sl.from, w: sinfo.w, h: sinfo.h, c: sl.c, end: 0 };
+      },
       end: function (skip) {
         vb.x = tx; vb.y = ty;
-        if (sl.exit) { if (!skip) { gateCells.forEach(function (q) { self.burst(q[0] + 0.5, q[1] + 0.5, COLORS[sl.c], Math.round(26 / Math.sqrt(gateCells.length))); }); hooks.exit && hooks.exit(sl.c); } }
-        else if (!skip) { vb.sq = 1; vb.sqd = sl.dir; vb.sqt = performance.now(); if (dist > 0) hooks.bump && hooks.bump(); }
+        if (self.trail && self.trail.vb === vb) { self.trail.end = performance.now(); self.trail.to = [tx, ty]; }
+        if (sl.exit) {
+          if (!skip) {
+            gateCells.forEach(function (q) { self.burst(q[0] + 0.5, q[1] + 0.5, COLORS[sl.c], Math.round(16 / Math.sqrt(gateCells.length))); self.fx.push({ type: 'flash', x: q[0], y: q[1], color: COLORS[sl.c], life: 1, decay: 2.6 }); });
+            hooks.exit && hooks.exit(sl.c);
+          }
+        } else if (!skip) {
+          vb.sq = 1; vb.sqd = sl.dir; vb.sqt = performance.now();
+          if (dist > 0) { self.impact(tx, ty, sinfo, sv); hooks.bump && hooks.bump(); }
+        }
       }
     });
     if (sl.exit) phases.push({ dur: 150, update: function (p) { vb.s = 1 - p; vb.a = 1 - p; }, end: function () { vb.s = 0; vb.a = 0; } });
@@ -402,10 +413,21 @@
     phases[0].start && phases[0].start(); phases[0]._started = true;
   };
 
+  // Soft glowing sparks plus an expanding ring. Units are grid cells and seconds.
   P.burst = function (cx, cy, color, n) {
+    this.fx.push({ type: 'ring', x: cx, y: cy, color: color, life: 1, decay: 2.2, r0: 0.3, r1: 1.25 });
     for (var i = 0; i < n; i++) {
-      var a = Math.random() * Math.PI * 2, sp = 1.5 + Math.random() * 4.5;
-      this.particles.push({ x: cx, y: cy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1, decay: 0.018 + Math.random() * 0.02, color: color, size: 0.06 + Math.random() * 0.1, rot: Math.random() * 6 });
+      var a = Math.random() * Math.PI * 2, sp = 1.2 + Math.random() * 3.4;
+      this.particles.push({ x: cx, y: cy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1, decay: 1.3 + Math.random() * 1.2, color: color, size: 0.05 + Math.random() * 0.09 });
+    }
+  };
+  // A small puff of dust along the edge where a block comes to rest.
+  P.impact = function (bx, by, info, v) {
+    var ex = bx + info.w / 2 + v[0] * info.w / 2, ey = by + info.h / 2 + v[1] * info.h / 2, span = v[0] ? info.h : info.w;
+    for (var i = 0; i < 5; i++) {
+      var o = (Math.random() - 0.5) * span * 0.8, side = Math.random() < 0.5 ? -1 : 1;
+      this.particles.push({ x: ex + (v[0] ? 0 : o), y: ey + (v[1] ? 0 : o), vx: (v[0] ? -v[0] * 0.4 : side * (0.6 + Math.random())), vy: (v[1] ? -v[1] * 0.4 : side * (0.6 + Math.random())),
+        life: 0.7, decay: 2.4 + Math.random(), color: '#ffffff', size: 0.04 + Math.random() * 0.04, soft: true });
     }
   };
 
@@ -438,6 +460,22 @@
     this.liftVis.forEach(function (lv, i) { self.drawPad(ctx, lv.x, lv.y, i, now); });
     // hint
     if (this.hint && !this.anim) this.drawHint(ctx, now);
+    // motion trail behind a sliding block
+    var tr = this.trail;
+    if (tr) {
+      var fade = tr.end ? 1 - (now - tr.end) / 220 : 1;
+      if (fade <= 0) this.trail = null;
+      else {
+        var hx = tr.end ? tr.to[0] : tr.vb.x, hy = tr.end ? tr.to[1] : tr.vb.y;
+        var x0 = Math.min(tr.from[0], hx), y0 = Math.min(tr.from[1], hy), x1 = Math.max(tr.from[0], hx) + tr.w, y1 = Math.max(tr.from[1], hy) + tr.h;
+        if (Math.abs(hx - tr.from[0]) + Math.abs(hy - tr.from[1]) > 0.05) {
+          var tg = ctx.createLinearGradient((tr.from[0] + tr.w / 2) * cs, (tr.from[1] + tr.h / 2) * cs, (hx + tr.w / 2) * cs, (hy + tr.h / 2) * cs);
+          tg.addColorStop(0, rgba(COLORS[tr.c], 0)); tg.addColorStop(1, rgba(COLORS[tr.c], 0.32 * fade));
+          var horizT = hy === tr.from[1], ins = cs * 0.2;
+          ctx.fillStyle = tg; rr(ctx, x0 * cs + (horizT ? 0 : ins), y0 * cs + (horizT ? ins : 0), (x1 - x0) * cs - (horizT ? 0 : 2 * ins), (y1 - y0) * cs - (horizT ? 2 * ins : 0), cs * 0.2); ctx.fill();
+        }
+      }
+    }
     // blocks
     var sel = this.selected;
     this.vis.forEach(function (b, id) {
@@ -459,14 +497,33 @@
       drawPiece(ctx, self.skin, b.c, b.sh, b.x * cs, b.y * cs, cs, { time: now, symbols: self.symbols, light: self.themeName === 'paper' });
       ctx.restore();
     });
-    // particles
-    for (var i = this.particles.length - 1; i >= 0; i--) {
-      var pt = this.particles[i];
-      pt.x += pt.vx / cs * 2.2; pt.y += pt.vy / cs * 2.2; pt.vy += 0.12; pt.vx *= 0.96; pt.life -= pt.decay; pt.rot += 0.2;
-      if (pt.life <= 0) { this.particles.splice(i, 1); continue; }
-      ctx.save(); ctx.globalAlpha = pt.life; ctx.translate(pt.x * cs, pt.y * cs); ctx.rotate(pt.rot);
-      ctx.fillStyle = pt.color; var ps = pt.size * cs; ctx.fillRect(-ps / 2, -ps / 2, ps, ps); ctx.restore();
+    // glow effects: gate flashes, rings and sparks (additive light on dark themes)
+    var dt = Math.min(0.05, (now - (this.lastT || now)) / 1000); this.lastT = now;
+    var light = this.themeName === 'paper';
+    ctx.save(); if (!light) ctx.globalCompositeOperation = 'lighter';
+    for (var fi = this.fx.length - 1; fi >= 0; fi--) {
+      var f = this.fx[fi]; f.life -= f.decay * dt;
+      if (f.life <= 0) { this.fx.splice(fi, 1); continue; }
+      if (f.type === 'ring') {
+        var k2 = 1 - f.life, rad = (f.r0 + (f.r1 - f.r0) * ease.outCubic(k2)) * cs;
+        ctx.globalAlpha = f.life * 0.7; ctx.strokeStyle = f.color; ctx.lineWidth = Math.max(1, cs * 0.09 * f.life);
+        ctx.beginPath(); ctx.arc(f.x * cs, f.y * cs, rad, 0, 7); ctx.stroke();
+      } else if (f.type === 'flash') {
+        var gx = (f.x + 0.5) * cs, gy = (f.y + 0.5) * cs, gr = ctx.createRadialGradient(gx, gy, 0, gx, gy, cs * 1.3);
+        gr.addColorStop(0, rgba(f.color, 0.75 * f.life)); gr.addColorStop(1, rgba(f.color, 0));
+        ctx.globalAlpha = 1; ctx.fillStyle = gr; ctx.fillRect(gx - cs * 1.3, gy - cs * 1.3, cs * 2.6, cs * 2.6);
+      }
     }
+    for (var i = this.particles.length - 1; i >= 0; i--) {
+      var pt = this.particles[i], drag = Math.pow(0.04, dt);
+      pt.x += pt.vx * dt; pt.y += pt.vy * dt; pt.vx *= drag; pt.vy *= drag; pt.life -= pt.decay * dt;
+      if (pt.life <= 0) { this.particles.splice(i, 1); continue; }
+      var pr = pt.size * cs * (0.5 + pt.life * 0.5), ppx = pt.x * cs, ppy = pt.y * cs;
+      ctx.globalAlpha = pt.life * (pt.soft ? 0.35 : 1);
+      if (!pt.soft) { ctx.fillStyle = rgba(pt.color.charAt(0) === '#' ? pt.color : '#ffffff', 0.25); ctx.beginPath(); ctx.arc(ppx, ppy, pr * 2.6, 0, 7); ctx.fill(); }
+      ctx.fillStyle = pt.soft ? pt.color : shade(pt.color, 0.45); ctx.beginPath(); ctx.arc(ppx, ppy, pr, 0, 7); ctx.fill();
+    }
+    ctx.restore();
     ctx.restore();
   };
 
