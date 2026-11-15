@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#12122a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="description" content="Chroma Dock: a slide-and-sort puzzle game. Slide colourful blocks into their matching gates, ride elevators and clear the generators.">
+  <title>Chroma Dock: Slide & Sort Puzzle</title>
+  <meta name="apple-mobile-web-app-title" content="Chroma Dock">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body data-theme="midnight">
+  <div id="app">
+
+    <!-- HOME -->
+    <section id="screen-home" class="screen active">
+      <div class="topbar">
+        <span></span>
+        <div class="gem-pill"><i class="gem"></i><span class="gem-count">0</span></div>
+      </div>
+      <div class="home-hero">
+        <canvas id="logo-canvas" width="300" height="160" aria-hidden="true"></canvas>
+        <h1 class="logo">CHROMA<span>DOCK</span></h1>
+        <p class="tagline">Slide. Sort. Escape.</p>
+      </div>
+      <div class="home-buttons">
+        <button class="btn btn-primary btn-xl" id="btn-play"><span>Play</span><small id="play-sub">Level 1</small></button>
+        <button class="btn btn-ghost" id="btn-levels">Levels</button>
+        <button class="btn btn-ghost" id="btn-store"><i class="gem"></i> Gem Store</button>
+        <button class="btn btn-ghost" id="btn-settings">Settings</button>
+        <button class="btn btn-ghost install-btn" id="btn-install" hidden>📲 Install app</button>
+      </div>
+      <p class="footnote">Gems are earned in-game only. No real money, ever.</p>
+    </section>
+
+    <!-- LEVEL SELECT -->
+    <section id="screen-levels" class="screen">
+      <div class="topbar">
+        <button class="icon-btn" data-back aria-label="Back">‹</button>
+        <h2>Levels</h2>
+        <div class="gem-pill"><i class="gem"></i><span class="gem-count">0</span></div>
+      </div>
+      <div class="scroll" id="level-list"></div>
+    </section>
+
+    <!-- GAME -->
+    <section id="screen-game" class="screen">
+      <div class="topbar game-top">
+        <button class="icon-btn" id="btn-game-back" aria-label="Menu">‹</button>
+        <div class="level-title"><div id="lvl-num">Level 1</div><div id="lvl-name">First Slide</div></div>
+        <div class="gem-pill"><i class="gem"></i><span class="gem-count">0</span></div>
+      </div>
+      <div class="hud">
+        <div class="timer">
+          <div class="timer-bar"><div class="timer-fill" id="timer-fill"></div></div>
+          <div class="timer-row">
+            <span id="timer-text">0:30</span>
+            <span id="bonus-text" class="bonus">Bonus <i class="gem"></i> +10</span>
+          </div>
+        </div>
+        <div class="moves"><span id="moves-text">0</span><small>moves · par <b id="par-text">0</b></small></div>
+      </div>
+      <div class="board-wrap" id="board-wrap">
+        <canvas id="board"></canvas>
+      </div>
+      <div class="toolbar">
+        <button class="tool" id="btn-undo"><span class="ti">↶</span><small>Undo</small></button>
+        <button class="tool" id="btn-restart"><span class="ti">⟲</span><small>Restart</small></button>
+        <button class="tool" id="btn-hint"><span class="ti">💡</span><small>Hint</small><b class="badge" id="hint-count">0</b></button>
+        <button class="tool" id="btn-boost"><span class="ti">⏱</span><small>+15s</small><b class="badge" id="boost-count">0</b></button>
+      </div>
+    </section>
+
+    <!-- STORE -->
+    <section id="screen-store" class="screen">
+      <div class="topbar">
+        <button class="icon-btn" data-back aria-label="Back">‹</button>
+        <h2>Gem Store</h2>
+        <div class="gem-pill"><i class="gem"></i><span class="gem-count">0</span></div>
+      </div>
+      <div class="tabs" id="store-tabs">
+        <button class="tab active" data-tab="power">Power-ups</button>
+        <button class="tab" data-tab="skin">Blocks</button>
+        <button class="tab" data-tab="theme">Themes</button>
+      </div>
+      <div class="scroll" id="store-list"></div>
+      <p class="footnote">Earn gems by beating the clock and collecting stars.</p>
+    </section>
+
+    <!-- SETTINGS -->
+    <section id="screen-settings" class="screen">
+      <div class="topbar">
+        <button class="icon-btn" data-back aria-label="Back">‹</button>
+        <h2>Settings</h2>
+        <span></span>
+      </div>
+      <div class="scroll settings">
+        <label class="setting"><span>Sound effects</span><input type="checkbox" id="set-sound"><i class="switch"></i></label>
+        <label class="setting"><span>Vibration</span><input type="checkbox" id="set-haptics"><i class="switch"></i></label>
+        <label class="setting"><span>Colour symbols <small>Shapes on blocks and gates (colour-blind friendly)</small></span><input type="checkbox" id="set-symbols"><i class="switch"></i></label>
+        <div class="setting how">
+          <h3>How to play</h3>
+          <ul>
+            <li><b>Swipe</b> a block to slide it. It keeps going until something stops it.</li>
+            <li>Slide a block into the <b>gate of its colour</b> to clear it. Other gates act as walls.</li>
+            <li>A block that lands on an <b>elevator</b> stops there. After every move, elevators step along their track and carry their block.</li>
+            <li><b>Big blocks</b> (bars, crates, L-blocks) slide as one piece. They need a gate at least as wide as they are, and they can't ride elevators.</li>
+            <li><b>Locked gates</b> show a padlock. They stay shut until every block of the padlock's colour has left the board.</li>
+            <li><b>Generators</b> drop a new block whenever their outlet is clear. Every block has to escape.</li>
+            <li>Beat the clock for <b>bonus gems</b>. Running out of time never ends the level.</li>
+            <li>You can also tap a block, then tap a spot in the same row or column. On a keyboard, use the arrow keys, Z (undo) and R (restart).</li>
+          </ul>
+        </div>
+        <div class="setting app-info">
+          <span>App <small id="app-version">Version</small></span>
+          <div class="app-btns">
+            <button class="btn" id="btn-install-2" hidden>Install</button>
+            <button class="btn" id="btn-check-update">Check for updates</button>
+          </div>
+        </div>
+        <div id="debug-section" class="debug">
+          <h3>Debug <small>Testing tools. They don't change your saved progress.</small></h3>
+          <label class="setting"><span>Unlock all levels</span><input type="checkbox" id="set-unlock-all"><i class="switch"></i></label>
+          <label class="setting"><span>Infinite gems <small>Store purchases are free</small></span><input type="checkbox" id="set-inf-gems"><i class="switch"></i></label>
+        </div>
+        <button class="btn btn-danger" id="btn-reset">Reset progress</button>
+      </div>
+    </section>
+
+    <!-- MODAL -->
+    <div id="modal" class="modal hidden" role="dialog" aria-modal="true">
+      <div class="modal-card" id="modal-card"></div>
+    </div>
+    <div id="toast" class="toast"></div>
+    <div id="update-bar" class="update-bar" hidden>
+      <span>✨ A new version is ready</span>
+      <button class="btn btn-gold" id="btn-update-now">Update</button>
+    </div>
+    <canvas id="fx" aria-hidden="true"></canvas>
+  </div>
+
+  <script src="js/engine.js"></script>
+  <script src="js/levels.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
